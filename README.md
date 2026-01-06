@@ -219,22 +219,7 @@ cat domains.txt | httpx -paths /page.php?file=test | lfix
 lfix -u "http://target.com/page.php?file=test" -proxy "http://127.0.0.1:8080"
 ```
 
-### Automation Script
 
-```bash
-#!/bin/bash
-# bulk_lfi_scan.sh
-
-TARGET_FILE="$1"
-OUTPUT_DIR="results"
-
-mkdir -p "$OUTPUT_DIR"
-
-while read domain; do
-    echo "[*] Scanning: $domain"
-    lfix -u "$domain" -o "$OUTPUT_DIR/${domain//\//_}.txt" -c 20
-done < "$TARGET_FILE"
-```
 
 ---
 
@@ -273,29 +258,7 @@ The developers assume no liability for misuse of this software.
 
 ---
 
-## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
----
-
-## 📜 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-## 🌟 Star History
-
-If you find this tool useful, please consider giving it a ⭐!
-
----
 
 <p align="center">
   <b>Made with ❤️ for the Security Community</b>
