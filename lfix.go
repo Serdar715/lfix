@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"crypto/tls"
+	_ "embed"
 	"encoding/base64"
 	"flag"
 	"fmt"
@@ -16,6 +17,9 @@ import (
 	"sync"
 	"time"
 )
+
+//go:embed payload.txt
+var embeddedPayloads string
 
 // --- PROJE SABİTLERİ ---
 
@@ -497,31 +501,29 @@ func loadTargets(opts Options) []string {
 }
 
 func loadPayloads(filename string) []string {
-	if filename == "" {
-		// 1. Öncelik: Yanındaki payload.txt dosyasını kontrol et
-		if _, err := os.Stat("payload.txt"); err == nil {
-			filename = "payload.txt"
-		} else {
-			// 2. Fallback: Dosya yoksa gömülü listeyi kullan
-			return []string{
-				"../../../../etc/passwd",
-				"/etc/passwd",
-				"php://filter/convert.base64-encode/resource=index.php",
-				"....//....//....//etc/passwd",
-				"../../../../windows/win.ini",
+	// Kullanıcı özel payload dosyası belirttiyse onu kullan
+	if filename != "" {
+		var p []string
+		f, err := os.Open(filename)
+		if err != nil {
+			logError("Payload dosyası açılamadı: %v", err)
+			return p
+		}
+		defer f.Close()
+
+		scanner := bufio.NewScanner(f)
+		for scanner.Scan() {
+			t := strings.TrimSpace(scanner.Text())
+			if t != "" {
+				p = append(p, t)
 			}
 		}
-	}
-	var p []string
-	f, err := os.Open(filename)
-	if err != nil {
 		return p
 	}
-	defer f.Close()
 
-	// BURASI DÜZELTİLDİ: scanner := bufio.NewScanner(f)
-	scanner := bufio.NewScanner(f)
-
+	// Kullanıcı dosya belirtmediyse gömülü payload'ları kullan
+	var p []string
+	scanner := bufio.NewScanner(strings.NewReader(embeddedPayloads))
 	for scanner.Scan() {
 		t := strings.TrimSpace(scanner.Text())
 		if t != "" {
