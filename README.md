@@ -59,6 +59,12 @@ git clone https://github.com/Serdar715/lfix.git && cd lfix && go build -o lfix l
 
 > **Note:** If you don't want to add to PATH, skip `sudo mv` and run with `./lfix`
 
+### Update to Latest Version
+
+```bash
+cd lfix && git pull && go build -o lfix lfix.go && sudo mv lfix /usr/local/bin/
+```
+
 ---
 
 ## 🚀 Quick Start
