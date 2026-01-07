@@ -51,23 +51,13 @@ sudo dnf install golang -y
 sudo pacman -S go --noconfirm
 ```
 
-### Step 2: Clone and Build
+### Step 2: One-Line Install
 
 ```bash
-git clone https://github.com/Serdar715/lfix.git && cd lfix && go build -o lfix lfix.go && chmod +x lfix
+git clone https://github.com/Serdar715/lfix.git && cd lfix && go build -o lfix lfix.go && chmod +x lfix && sudo mv lfix /usr/local/bin/ && lfix -h
 ```
 
-### Step 3: Add to PATH (Optional but Recommended)
-
-```bash
-sudo mv lfix /usr/local/bin/
-```
-
-### Step 4: Verify Installation
-
-```bash
-lfix -h
-```
+> **Note:** If you don't want to add to PATH, skip `sudo mv` and run with `./lfix`
 
 ---
 
