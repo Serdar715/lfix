@@ -50,6 +50,7 @@ var signatures = []string{
 	"root:x:0:0:",       // Root user - en güvenilir
 	"daemon:x:1:1:",     // Daemon user
 	"www-data:x:33:33:", // Apache user
+	"nobody:x:65534:",   // Nobody user
 
 	// 2. LINUX /etc/shadow (Hash formatları)
 	"root:$6$", // SHA-512 hash
@@ -65,13 +66,23 @@ var signatures = []string{
 	// 4. WINDOWS win.ini
 	"for 16-bit app support",
 
-	// 5. PHP HATA MESAJLARI (Kesin LFI belirtisi - 1 yeterli)
+	// 5. WINDOWS system.ini
+	"[drivers]",
+	"[mci]",
+	"wave=mmdrv.dll",
+
+	// 6. IIS web.config
+	"<configuration>",
+	"<system.webServer>",
+	"<connectionStrings>",
+
+	// 7. PHP HATA MESAJLARI (Kesin LFI belirtisi - 1 yeterli)
 	"Warning: include(",
 	"Warning: require(",
 	"failed to open stream: No such file",
 	"Failed opening required",
 
-	// 6. JAVA / TOMCAT (web.xml içeriği)
+	// 8. JAVA / TOMCAT (web.xml içeriği)
 	"<servlet-class>",
 	"<servlet-mapping>",
 }
@@ -130,6 +141,7 @@ type Options struct {
 	Verbose      bool
 	Debug        bool
 	UseMutation  bool
+	Calibrate    bool
 }
 
 type Task struct {
@@ -142,9 +154,10 @@ type Task struct {
 }
 
 type Scanner struct {
-	Client  *http.Client
-	Options Options
-	Output  *os.File
+	Client        *http.Client
+	Options       Options
+	Output        *os.File
+	BaselineCache sync.Map // URL -> baseline response body
 }
 
 // --- MAIN FUNCTION ---
@@ -355,6 +368,12 @@ func (s *Scanner) worker(tasks <-chan Task, wg *sync.WaitGroup) {
 			logDebug("[%s] %s", task.InjectionPoint, task.URL)
 		}
 
+		// Auto-Calibration: Baseline al
+		var baselineBody string
+		if s.Options.Calibrate {
+			baselineBody = s.getBaseline(task)
+		}
+
 		req, err := http.NewRequest(task.Method, task.URL, strings.NewReader(task.PostData))
 		if err != nil {
 			continue
@@ -386,8 +405,55 @@ func (s *Scanner) worker(tasks <-chan Task, wg *sync.WaitGroup) {
 			continue
 		}
 
-		s.analyze(string(body), task)
+		s.analyze(string(body), baselineBody, task)
 	}
+}
+
+// getBaseline: Orijinal URL'nin response'unu al (cache'li)
+func (s *Scanner) getBaseline(task Task) string {
+	// URL'den base key oluştur (payload olmadan)
+	u, err := url.Parse(task.URL)
+	if err != nil {
+		return ""
+	}
+	baseKey := u.Scheme + "://" + u.Host + u.Path
+
+	// Cache'de var mı?
+	if cached, ok := s.BaselineCache.Load(baseKey); ok {
+		return cached.(string)
+	}
+
+	// Yoksa baseline isteği yap
+	req, err := http.NewRequest(task.Method, baseKey, nil)
+	if err != nil {
+		return ""
+	}
+
+	if len(userAgents) > 0 {
+		req.Header.Set("User-Agent", userAgents[rand.Intn(len(userAgents))])
+	}
+
+	resp, err := s.Client.Do(req)
+	if err != nil {
+		s.BaselineCache.Store(baseKey, "")
+		return ""
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		s.BaselineCache.Store(baseKey, "")
+		return ""
+	}
+
+	baselineStr := string(body)
+	s.BaselineCache.Store(baseKey, baselineStr)
+
+	if s.Options.Debug {
+		logDebug("[BASELINE] %s (%d bytes)", baseKey, len(baselineStr))
+	}
+
+	return baselineStr
 }
 
 // Payload kategorisine göre aranacak imzalar (optimize edilmiş)
@@ -396,6 +462,7 @@ var payloadSignatureMap = map[string][]string{
 		"root:x:0:0:",
 		"daemon:x:1:1:",
 		"www-data:x:33:33:",
+		"nobody:x:65534:",
 	},
 	"shadow": {
 		"root:$6$",
@@ -410,6 +477,16 @@ var payloadSignatureMap = map[string][]string{
 	},
 	"win.ini": {
 		"for 16-bit app support",
+	},
+	"system.ini": {
+		"[drivers]",
+		"[mci]",
+		"wave=mmdrv.dll",
+	},
+	"web_config": {
+		"<configuration>",
+		"<system.webServer>",
+		"<connectionStrings>",
 	},
 	"php_error": {
 		"Warning: include(",
@@ -439,6 +516,12 @@ func getPayloadCategory(payload string) string {
 	if strings.Contains(payloadLower, "win.ini") {
 		return "win.ini"
 	}
+	if strings.Contains(payloadLower, "system.ini") {
+		return "system.ini"
+	}
+	if strings.Contains(payloadLower, "web.config") {
+		return "web_config"
+	}
 	if strings.Contains(payloadLower, "web.xml") || strings.Contains(payloadLower, "web-inf") {
 		return "web_xml"
 	}
@@ -446,7 +529,7 @@ func getPayloadCategory(payload string) string {
 	return "" // Bilinmeyen kategori
 }
 
-func (s *Scanner) analyze(body string, task Task) {
+func (s *Scanner) analyze(body string, baseline string, task Task) {
 	// Minimum güvenilirlik için gereken imza sayısı
 	const minMatchesRequired = 2 // Tek eşleşme yeterli DEĞİL
 
@@ -467,9 +550,17 @@ func (s *Scanner) analyze(body string, task Task) {
 		targetSignatures = signatures
 	}
 
-	// 2. İmza kontrolü (Plaintext)
+	// 2. İmza kontrolü (Plaintext) - Calibration ile
 	for _, sig := range targetSignatures {
 		if strings.Contains(body, sig) {
+			// AUTO-CALIBRATION: İmza baseline'da da var mı?
+			if baseline != "" && strings.Contains(baseline, sig) {
+				// İmza zaten orijinal response'da var - FALSE POSITIVE
+				if s.Options.Debug {
+					logDebug("[CALIBRATION] Skipping '%s' - exists in baseline", sig)
+				}
+				continue
+			}
 			matchCount++
 			matchedSignatures = append(matchedSignatures, sig)
 		}
@@ -484,6 +575,10 @@ func (s *Scanner) analyze(body string, task Task) {
 				decodedStr := string(decodedBytes)
 				for _, sig := range targetSignatures {
 					if strings.Contains(decodedStr, sig) {
+						// Baseline kontrolü base64 için de
+						if baseline != "" && strings.Contains(baseline, sig) {
+							continue
+						}
 						matchCount++
 						matchedSignatures = append(matchedSignatures, "BASE64:"+sig)
 					}
@@ -496,8 +591,8 @@ func (s *Scanner) analyze(body string, task Task) {
 	// Passwd/shadow gibi güvenilir dosyalar için 2+ imza gerekli
 	// PHP hataları gibi kesin belirtiler için 1 yeterli
 	requiredMatches := minMatchesRequired
-	if category == "php_error" {
-		requiredMatches = 1 // PHP hata mesajları kesin LFI belirtisi
+	if category == "php_error" || category == "web_config" {
+		requiredMatches = 1 // PHP hata mesajları ve web.config kesin belirtisi
 	}
 
 	if matchCount >= requiredMatches {
@@ -552,6 +647,7 @@ func parseFlags() Options {
 	flag.BoolVar(&o.Verbose, "v", false, "Verbose")
 	flag.BoolVar(&o.Debug, "debug", false, "Debug")
 	flag.BoolVar(&o.UseMutation, "mutate", true, "Mutasyon")
+	flag.BoolVar(&o.Calibrate, "calibrate", true, "Auto-Calibration (baseline karşılaştırma)")
 	flag.Parse()
 	return o
 }
