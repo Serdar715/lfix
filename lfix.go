@@ -42,36 +42,38 @@ const (
 )
 
 // --- İMZALAR (SIGNATURES) ---
+// Her kategori için spesifik ve güvenilir imzalar
+// Genel kelimeler (extensions, fonts vb.) false positive yarattığı için çıkarıldı
+
 var signatures = []string{
-	// 1. LINUX KANITLARI
-	"root:x:0:0",
-	"daemon:x:",
-	"www-data:x:",
-	"/bin/bash",
-	"/bin/sh",
-	"Debian-exim:x:",
-	"ssh-rsa",
+	// 1. LINUX /etc/passwd (Kesin belirtiler - 2+ eşleşme gerekli)
+	"root:x:0:0:",       // Root user - en güvenilir
+	"daemon:x:1:1:",     // Daemon user
+	"www-data:x:33:33:", // Apache user
 
-	// 2. WINDOWS KANITLARI
+	// 2. LINUX /etc/shadow (Hash formatları)
+	"root:$6$", // SHA-512 hash
+	"root:$5$", // SHA-256 hash
+	"root:$1$", // MD5 hash
+	"root:!:",  // Locked account
+	"root:*:",  // Disabled password
+
+	// 3. WINDOWS boot.ini
 	"[boot loader]",
-	"default=multi(0)disk(0)",
-	"extensions",
-	"drivers\\etc\\hosts",
-	"[fonts]",
+	"multi(0)disk(0)rdisk(0)partition",
 
-	// 3. PHP HATA MESAJLARI
+	// 4. WINDOWS win.ini
+	"for 16-bit app support",
+
+	// 5. PHP HATA MESAJLARI (Kesin LFI belirtisi - 1 yeterli)
 	"Warning: include(",
 	"Warning: require(",
-	"failed to open stream",
+	"failed to open stream: No such file",
 	"Failed opening required",
-	"eval()'d code",
 
-	// 4. JAVA / TOMCAT
-	"java.io.FileNotFoundException",
-	"WEB-INF/web.xml",
-
-	// 5. KAYNAK KOD SIZINTISI
-	"<?php",
+	// 6. JAVA / TOMCAT (web.xml içeriği)
+	"<servlet-class>",
+	"<servlet-mapping>",
 }
 
 // --- USER AGENT HAVUZU ---
@@ -388,42 +390,128 @@ func (s *Scanner) worker(tasks <-chan Task, wg *sync.WaitGroup) {
 	}
 }
 
+// Payload kategorisine göre aranacak imzalar (optimize edilmiş)
+var payloadSignatureMap = map[string][]string{
+	"passwd": {
+		"root:x:0:0:",
+		"daemon:x:1:1:",
+		"www-data:x:33:33:",
+	},
+	"shadow": {
+		"root:$6$",
+		"root:$5$",
+		"root:$1$",
+		"root:!:",
+		"root:*:",
+	},
+	"boot.ini": {
+		"[boot loader]",
+		"multi(0)disk(0)rdisk(0)partition",
+	},
+	"win.ini": {
+		"for 16-bit app support",
+	},
+	"php_error": {
+		"Warning: include(",
+		"Warning: require(",
+		"failed to open stream: No such file",
+		"Failed opening required",
+	},
+	"web_xml": {
+		"<servlet-class>",
+		"<servlet-mapping>",
+	},
+}
+
+// Payload'dan kategori belirle
+func getPayloadCategory(payload string) string {
+	payloadLower := strings.ToLower(payload)
+
+	if strings.Contains(payloadLower, "passwd") {
+		return "passwd"
+	}
+	if strings.Contains(payloadLower, "shadow") {
+		return "shadow"
+	}
+	if strings.Contains(payloadLower, "boot.ini") {
+		return "boot.ini"
+	}
+	if strings.Contains(payloadLower, "win.ini") {
+		return "win.ini"
+	}
+	if strings.Contains(payloadLower, "web.xml") || strings.Contains(payloadLower, "web-inf") {
+		return "web_xml"
+	}
+
+	return "" // Bilinmeyen kategori
+}
+
 func (s *Scanner) analyze(body string, task Task) {
+	// Minimum güvenilirlik için gereken imza sayısı
+	const minMatchesRequired = 2 // Tek eşleşme yeterli DEĞİL
+
 	found := false
 	matchInfo := ""
+	matchCount := 0
+	var matchedSignatures []string
 
-	// 1. Plaintext Kontrol
-	for _, sig := range signatures {
+	// 1. Payload kategorisine göre hedefli arama yap
+	category := getPayloadCategory(task.Payload)
+	var targetSignatures []string
+
+	if category != "" && len(payloadSignatureMap[category]) > 0 {
+		// Spesifik kategori - sadece ilgili imzaları ara
+		targetSignatures = payloadSignatureMap[category]
+	} else {
+		// Bilinmeyen kategori - tüm imzaları ara ama daha yüksek eşik
+		targetSignatures = signatures
+	}
+
+	// 2. İmza kontrolü (Plaintext)
+	for _, sig := range targetSignatures {
 		if strings.Contains(body, sig) {
-			found = true
-			matchInfo = sig
-			break
+			matchCount++
+			matchedSignatures = append(matchedSignatures, sig)
 		}
 	}
 
-	// 2. Base64 Decode Kontrol
-	if !found {
+	// 3. Base64 Decode Kontrol (sadece henüz yeterli eşleşme yoksa)
+	if matchCount < minMatchesRequired {
 		matches := base64Regex.FindAllString(body, -1)
 		for _, m := range matches {
 			decodedBytes, err := base64.StdEncoding.DecodeString(m)
 			if err == nil {
 				decodedStr := string(decodedBytes)
-				for _, sig := range signatures {
+				for _, sig := range targetSignatures {
 					if strings.Contains(decodedStr, sig) {
-						found = true
-						matchInfo = "BASE64:" + sig
-						break
+						matchCount++
+						matchedSignatures = append(matchedSignatures, "BASE64:"+sig)
 					}
 				}
 			}
-			if found {
-				break
-			}
+		}
+	}
+
+	// 4. Sonuç değerlendirme
+	// Passwd/shadow gibi güvenilir dosyalar için 2+ imza gerekli
+	// PHP hataları gibi kesin belirtiler için 1 yeterli
+	requiredMatches := minMatchesRequired
+	if category == "php_error" {
+		requiredMatches = 1 // PHP hata mesajları kesin LFI belirtisi
+	}
+
+	if matchCount >= requiredMatches {
+		found = true
+		if len(matchedSignatures) > 0 {
+			matchInfo = fmt.Sprintf("%d matches: %s", matchCount, strings.Join(matchedSignatures, ", "))
 		}
 	}
 
 	if found {
 		s.reportVuln(task, matchInfo)
+	} else if matchCount > 0 && s.Options.Verbose {
+		// Yetersiz eşleşme - uyarı göster
+		fmt.Printf("%s[WEAK] %s (only %d match, need %d)%s\n", ColorYellow, task.URL, matchCount, requiredMatches, ColorReset)
 	} else if s.Options.Verbose {
 		fmt.Printf("%s[SAFE] %s%s\n", ColorGrey, task.URL, ColorReset)
 	}
