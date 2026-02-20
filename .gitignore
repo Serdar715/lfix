@@ -1,6 +1,6 @@
 # Binaries
-lfix
-lfix.exe
+/lfix
+/lfix.exe
 *.exe
 *.exe~
 *.dll
