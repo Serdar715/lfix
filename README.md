@@ -54,7 +54,7 @@ sudo pacman -S go --noconfirm
 ### Step 2: One-Line Install
 
 ```bash
-git clone https://github.com/Serdar715/lfix.git && cd lfix && go build -o lfix lfix.go && chmod +x lfix && sudo mv lfix /usr/local/bin/ && lfix -h
+git clone https://github.com/Serdar715/lfix.git && cd lfix && go build -o lfix ./cmd/lfix && chmod +x lfix && sudo mv lfix /usr/local/bin/ && lfix -h
 ```
 
 > **Note:** If you don't want to add to PATH, skip `sudo mv` and run with `./lfix`
@@ -62,7 +62,7 @@ git clone https://github.com/Serdar715/lfix.git && cd lfix && go build -o lfix l
 ### Update to Latest Version
 
 ```bash
-cd lfix && git pull && go build -o lfix lfix.go && sudo mv lfix /usr/local/bin/
+cd lfix && git pull && go build -o lfix ./cmd/lfix && sudo mv lfix /usr/local/bin/
 ```
 
 ---
