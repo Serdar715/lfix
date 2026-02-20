@@ -27,9 +27,9 @@ type Signature struct {
 var AllSignatures = []Signature{
 	// --- LINUX /etc/passwd (High Confidence) ---
 	{Pattern: "root:x:0:0:", Category: CategoryPasswd, Confidence: 10},
-	{Pattern: "daemon:x:1:1:", Category: CategoryPasswd, Confidence: 8},
-	{Pattern: "www-data:x:33:33:", Category: CategoryPasswd, Confidence: 8},
-	{Pattern: "nobody:x:65534:", Category: CategoryPasswd, Confidence: 8},
+	{Pattern: "daemon:x:1:1:", Category: CategoryPasswd, Confidence: 9},
+	{Pattern: "www-data:x:33:33:", Category: CategoryPasswd, Confidence: 9},
+	{Pattern: "nobody:x:65534:", Category: CategoryPasswd, Confidence: 9},
 
 	// --- LINUX /etc/shadow (High Confidence) ---
 	{Pattern: "root:$6$", Category: CategoryShadow, Confidence: 10},
@@ -38,22 +38,29 @@ var AllSignatures = []Signature{
 	{Pattern: "root:!:", Category: CategoryShadow, Confidence: 9},
 	{Pattern: "root:*:", Category: CategoryShadow, Confidence: 9},
 
+	// --- LINUX Proc FS & Logs (High Confidence) ---
+	{Pattern: "PATH=/usr/local/bin", Category: CategoryGeneric, Confidence: 8},
+	{Pattern: "HTTP_USER_AGENT=", Category: CategoryGeneric, Confidence: 10}, // /proc/self/environ
+	{Pattern: "apache_bundle", Category: CategoryGeneric, Confidence: 7},
+	{Pattern: "[error] [client", Category: CategoryGeneric, Confidence: 8}, // Error logs
+
 	// --- WINDOWS boot.ini (Medium-High Confidence) ---
-	{Pattern: "[boot loader]", Category: CategoryBootIni, Confidence: 7},
-	{Pattern: "multi(0)disk(0)rdisk(0)partition", Category: CategoryBootIni, Confidence: 8},
+	{Pattern: "[boot loader]", Category: CategoryBootIni, Confidence: 8},
+	{Pattern: "multi(0)disk(0)rdisk(0)partition", Category: CategoryBootIni, Confidence: 10},
 
 	// --- WINDOWS win.ini (Low-Medium Confidence) ---
-	{Pattern: "for 16-bit app support", Category: CategoryWinIni, Confidence: 5},
+	{Pattern: "; for 16-bit app support", Category: CategoryWinIni, Confidence: 8},
+	{Pattern: "[extensions]", Category: CategoryWinIni, Confidence: 7},
 
 	// --- WINDOWS system.ini (Low Confidence) ---
-	{Pattern: "[drivers]", Category: CategorySystemIni, Confidence: 3},
-	{Pattern: "[mci]", Category: CategorySystemIni, Confidence: 3},
-	{Pattern: "wave=mmdrv.dll", Category: CategorySystemIni, Confidence: 4},
+	{Pattern: "[drivers]", Category: CategorySystemIni, Confidence: 7},
+	{Pattern: "[mci]", Category: CategorySystemIni, Confidence: 7},
+	{Pattern: "wave=mmdrv.dll", Category: CategorySystemIni, Confidence: 8},
 
 	// --- IIS web.config (High Confidence) ---
-	{Pattern: "<configuration>", Category: CategoryIISConfig, Confidence: 7}, // Can be generic, but context matters
-	{Pattern: "<system.webServer>", Category: CategoryIISConfig, Confidence: 8},
-	{Pattern: "<connectionStrings>", Category: CategoryIISConfig, Confidence: 9},
+	{Pattern: "<configuration>", Category: CategoryIISConfig, Confidence: 7},
+	{Pattern: "<system.webServer>", Category: CategoryIISConfig, Confidence: 9},
+	{Pattern: "<connectionStrings>", Category: CategoryIISConfig, Confidence: 10},
 
 	// --- PHP HATA MESAJLARI (Highest Confidence) ---
 	{Pattern: "Warning: include(", Category: CategoryPHPError, Confidence: 10},
@@ -62,6 +69,7 @@ var AllSignatures = []Signature{
 	{Pattern: "Failed opening required", Category: CategoryPHPError, Confidence: 10},
 
 	// --- JAVA / TOMCAT (Medium Confidence) ---
-	{Pattern: "<servlet-class>", Category: CategoryJava, Confidence: 7},
-	{Pattern: "<servlet-mapping>", Category: CategoryJava, Confidence: 7},
+	{Pattern: "<servlet-class>", Category: CategoryJava, Confidence: 8},
+	{Pattern: "<servlet-mapping>", Category: CategoryJava, Confidence: 8},
+	{Pattern: "java.io.FileNotFoundException:", Category: CategoryJava, Confidence: 9},
 }

@@ -2,7 +2,6 @@ package scanner
 
 import (
 	"crypto/tls"
-	"github.com/Serdar715/lfix/pkg/engine"
 	"io"
 	"math/rand"
 	"net/http"
@@ -10,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Serdar715/lfix/pkg/engine"
 )
 
 // Options holds the configuration for the scanner.
@@ -136,17 +137,16 @@ func (s *Scanner) worker(tasks <-chan engine.Task, findings chan<- engine.Findin
 
 // getBaseline fetches the original response for a URL to compare against for calibration.
 func (s *Scanner) getBaseline(task engine.Task) string {
-	u, err := url.Parse(task.URL)
-	if err != nil {
-		return ""
-	}
-	baseKey := u.Scheme + "://" + u.Host + u.Path
+	// Use OriginalURL instead of current Task.URL to get a clean baseline
+	// Remove FUZZ keyword if it exists in the original URL
+	cleanURL := strings.ReplaceAll(task.OriginalURL, "FUZZ", "")
+	baseKey := cleanURL
 
 	if cached, ok := s.BaselineCache.Load(baseKey); ok {
 		return cached.(string)
 	}
 
-	req, err := http.NewRequest(task.Method, baseKey, nil) // Use a clean request
+	req, err := http.NewRequest(task.Method, cleanURL, nil) // Use a clean request
 	if err != nil {
 		return ""
 	}

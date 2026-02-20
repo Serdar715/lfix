@@ -2,9 +2,10 @@ package engine
 
 import (
 	"fmt"
-	"github.com/Serdar715/lfix/pkg/mutations"
 	"net/url"
 	"strings"
+
+	"github.com/Serdar715/lfix/pkg/mutations"
 )
 
 // GenerateTasks creates and sends tasks to the tasks channel based on the target, payloads, and options.
@@ -38,6 +39,7 @@ func GenerateTasks(target string, payloads []string, postData string, method str
 
 				tasks <- Task{
 					URL:            finalURL,
+					OriginalURL:    target,
 					Method:         method,
 					PostData:       finalPost,
 					Headers:        headers,
@@ -69,6 +71,7 @@ func GenerateTasks(target string, payloads []string, postData string, method str
 				uClone.RawQuery = strings.Join(queryStringParts, "&")
 				tasks <- Task{
 					URL:            uClone.String(),
+					OriginalURL:    target,
 					Method:         method,
 					PostData:       postData,
 					Headers:        staticHeaders,
@@ -95,6 +98,7 @@ func GenerateTasks(target string, payloads []string, postData string, method str
 						newPostData := strings.Join(postBodyParts, "&")
 						tasks <- Task{
 							URL:            target,
+							OriginalURL:    target,
 							Method:         "POST",
 							PostData:       newPostData,
 							Headers:        staticHeaders,
@@ -113,6 +117,7 @@ func GenerateTasks(target string, payloads []string, postData string, method str
 					h[cleanKey] = payload
 					tasks <- Task{
 						URL:            target,
+						OriginalURL:    target,
 						Method:         method,
 						PostData:       postData,
 						Headers:        h,

@@ -3,6 +3,7 @@ package engine
 // Task represents a single request to be sent by a worker.
 type Task struct {
 	URL            string
+	OriginalURL    string // The URL without any payloads (used for baseline calibration)
 	Method         string
 	PostData       string
 	Headers        map[string]string

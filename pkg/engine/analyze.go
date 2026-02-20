@@ -3,14 +3,15 @@ package engine
 import (
 	"encoding/base64"
 	"fmt"
-	"github.com/Serdar715/lfix/pkg/signatures"
 	"regexp"
 	"strings"
+
+	"github.com/Serdar715/lfix/pkg/signatures"
 )
 
 const (
 	// ConfidenceThreshold is the minimum total confidence score to trigger a vulnerability finding.
-	ConfidenceThreshold = 9
+	ConfidenceThreshold = 7
 )
 
 var base64Regex = regexp.MustCompile(`([A-Za-z0-9+/]{20,})={0,2}`)
@@ -25,7 +26,9 @@ func AnalyzeResponse(body string, baseline string, task Task) *Finding {
 	for _, sig := range signatures.AllSignatures {
 		if strings.Contains(body, sig.Pattern) {
 			// Auto-Calibration: Skip if the signature also exists in the baseline response.
-			if baseline != "" && strings.Contains(baseline, sig.Pattern) {
+			// Optimization: If a signature has maximum confidence (10), we can trust it even without calibration
+			// to reduce false negatives caused by faulty baselines.
+			if sig.Confidence < 10 && baseline != "" && strings.Contains(baseline, sig.Pattern) {
 				continue // False positive, exists in normal page
 			}
 			totalConfidence += sig.Confidence
