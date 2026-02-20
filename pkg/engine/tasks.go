@@ -10,7 +10,7 @@ import (
 
 // GenerateTasks creates and sends tasks to the tasks channel based on the target, payloads, and options.
 func GenerateTasks(target string, payloads []string, postData string, method string, targetHeader string, staticHeaders map[string]string, useMutation bool, tasks chan<- Task) {
-	target = strings.ReplaceAll(target, "", "")
+	target = strings.ReplaceAll(target, "\\", "")
 
 	hasFuzz := strings.Contains(target, "FUZZ") ||
 		strings.Contains(postData, "FUZZ") ||
