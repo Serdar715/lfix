@@ -8,27 +8,44 @@ func TestGetMutations(t *testing.T) {
 	payload := "../etc/passwd"
 	mutations := GetMutations(payload)
 
-	if len(mutations) != 5 {
-		t.Errorf("Expected 5 mutations, but got %d", len(mutations))
+	// Ensure expected count matches the current implementation.
+	const expectedCount = 8
+	if len(mutations) != expectedCount {
+		t.Errorf("Expected %d mutations, but got %d", expectedCount, len(mutations))
 	}
 
-	expectedFirst := payload
-	if mutations[0] != expectedFirst {
-		t.Errorf("Expected first mutation to be '%s', but got '%s'", expectedFirst, mutations[0])
+	// Index 0: raw payload
+	if mutations[0] != payload {
+		t.Errorf("Expected raw payload at index 0, got '%s'", mutations[0])
 	}
 
-	expectedSecond := "..%2Fetc%2Fpasswd"
-	if mutations[1] != expectedSecond {
-		t.Errorf("Expected second mutation to be '%s', but got '%s'", expectedSecond, mutations[1])
+	// Index 1: single URL encode  ../ → ..%2F
+	expected1 := "..%2Fetc%2Fpasswd"
+	if mutations[1] != expected1 {
+		t.Errorf("Expected single-url-encoded at index 1 '%s', got '%s'", expected1, mutations[1])
 	}
 
+	// Index 3: null byte append
 	expectedNullByte := payload + "%00"
 	if mutations[3] != expectedNullByte {
-		t.Errorf("Expected fourth mutation to be '%s', but got '%s'", expectedNullByte, mutations[3])
+		t.Errorf("Expected null-byte mutation at index 3 '%s', got '%s'", expectedNullByte, mutations[3])
 	}
 
-	expectedPathFilterBypass := "....//etc/passwd"
-	if mutations[4] != expectedPathFilterBypass {
-		t.Errorf("Expected fifth mutation to be '%s', but got '%s'", expectedPathFilterBypass, mutations[4])
+	// Index 4: path filter bypass (....// replaces ../)
+	expectedPathBypass := "....//etc/passwd"
+	if mutations[4] != expectedPathBypass {
+		t.Errorf("Expected path-filter bypass at index 4 '%s', got '%s'", expectedPathBypass, mutations[4])
+	}
+
+	// Index 5: backslash bypass
+	expectedBackslash := "..\\etc\\passwd"
+	if mutations[5] != expectedBackslash {
+		t.Errorf("Expected backslash bypass at index 5 '%s', got '%s'", expectedBackslash, mutations[5])
+	}
+
+	// Index 6: semicolon separator bypass
+	expectedSemicolon := "..;/etc/passwd"
+	if mutations[6] != expectedSemicolon {
+		t.Errorf("Expected semicolon bypass at index 6 '%s', got '%s'", expectedSemicolon, mutations[6])
 	}
 }

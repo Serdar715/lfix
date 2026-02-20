@@ -32,7 +32,16 @@ func TestSignatureConfidence(t *testing.T) {
 		t.Errorf("Expected 'root:x:0:0:' to have confidence 10, but got %d", confidenceMap["root:x:0:0:"])
 	}
 
-	if confidenceMap["[drivers]"] != 3 {
-		t.Errorf("Expected '[drivers]' to have confidence 3, but got %d", confidenceMap["[drivers]"])
+	// Verify high-FP generic patterns have been removed from AllSignatures.
+	removedPatterns := []string{"[drivers]", "[extensions]", "<configuration>", "apache_bundle"}
+	for _, p := range removedPatterns {
+		if _, exists := confidenceMap[p]; exists {
+			t.Errorf("Pattern '%s' should have been removed (too generic / high FP risk)", p)
+		}
+	}
+
+	// Verify specific IIS pattern kept.
+	if confidenceMap["<system.webServer>"] != 9 {
+		t.Errorf("Expected '<system.webServer>' to have confidence 9, but got %d", confidenceMap["<system.webServer>"])
 	}
 }
