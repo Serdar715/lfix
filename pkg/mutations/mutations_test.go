@@ -6,7 +6,7 @@ import (
 
 func TestGetMutations(t *testing.T) {
 	payload := "../etc/passwd"
-	mutations := GetMutations(payload)
+	mutations := GetMutations(payload, "")
 
 	// Ensure expected count matches the current implementation.
 	const expectedCount = 8
@@ -25,27 +25,32 @@ func TestGetMutations(t *testing.T) {
 		t.Errorf("Expected single-url-encoded at index 1 '%s', got '%s'", expected1, mutations[1])
 	}
 
-	// Index 3: null byte append
-	expectedNullByte := payload + "%00"
-	if mutations[3] != expectedNullByte {
-		t.Errorf("Expected null-byte mutation at index 3 '%s', got '%s'", expectedNullByte, mutations[3])
-	}
-
-	// Index 4: path filter bypass (....// replaces ../)
+	// Index 3: path filter bypass (....// replaces ../)
 	expectedPathBypass := "....//etc/passwd"
-	if mutations[4] != expectedPathBypass {
-		t.Errorf("Expected path-filter bypass at index 4 '%s', got '%s'", expectedPathBypass, mutations[4])
+	if mutations[3] != expectedPathBypass {
+		t.Errorf("Expected path-filter bypass at index 3 '%s', got '%s'", expectedPathBypass, mutations[3])
 	}
 
-	// Index 5: backslash bypass
+	// Index 4: backslash bypass
 	expectedBackslash := "..\\etc\\passwd"
-	if mutations[5] != expectedBackslash {
-		t.Errorf("Expected backslash bypass at index 5 '%s', got '%s'", expectedBackslash, mutations[5])
+	if mutations[4] != expectedBackslash {
+		t.Errorf("Expected backslash bypass at index 4 '%s', got '%s'", expectedBackslash, mutations[4])
 	}
 
-	// Index 6: semicolon separator bypass
+	// Index 5: semicolon separator bypass
 	expectedSemicolon := "..;/etc/passwd"
-	if mutations[6] != expectedSemicolon {
-		t.Errorf("Expected semicolon bypass at index 6 '%s', got '%s'", expectedSemicolon, mutations[6])
+	if mutations[5] != expectedSemicolon {
+		t.Errorf("Expected semicolon bypass at index 5 '%s', got '%s'", expectedSemicolon, mutations[5])
+	}
+
+	// Index 6: unicode slash
+	if mutations[6] != "..%ef%bc%8fetc%ef%bc%8fpasswd" {
+		t.Errorf("Expected unicode slash at index 6, got '%s'", mutations[6])
+	}
+
+	// Index 7: null byte append
+	expectedNullByte := payload + "%00"
+	if mutations[7] != expectedNullByte {
+		t.Errorf("Expected null-byte mutation at index 7 '%s', got '%s'", expectedNullByte, mutations[7])
 	}
 }

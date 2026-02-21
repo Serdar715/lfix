@@ -19,7 +19,7 @@ func GenerateTasks(target string, payloads []string, postData string, method str
 	for _, rawPayload := range payloads {
 		payloadMutations := []string{rawPayload}
 		if useMutation {
-			payloadMutations = mutations.GetMutations(rawPayload)
+			payloadMutations = mutations.GetMutations(rawPayload, "")
 		}
 
 		for _, payload := range payloadMutations {
@@ -88,7 +88,8 @@ func GenerateTasks(target string, payloads []string, postData string, method str
 						var postBodyParts []string
 						for key, values := range postParams {
 							if key == attackParam {
-								postBodyParts = append(postBodyParts, fmt.Sprintf("%s=%s", key, payload))
+								// URL encode the payload for POST body
+								postBodyParts = append(postBodyParts, fmt.Sprintf("%s=%s", key, url.QueryEscape(payload)))
 							} else {
 								for _, val := range values {
 									postBodyParts = append(postBodyParts, fmt.Sprintf("%s=%s", key, url.QueryEscape(val)))

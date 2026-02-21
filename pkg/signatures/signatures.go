@@ -35,6 +35,8 @@ var AllSignatures = []Signature{
 	{Pattern: "daemon:x:1:1:", Category: CategoryPasswd, Confidence: 9},
 	{Pattern: "www-data:x:33:33:", Category: CategoryPasswd, Confidence: 9},
 	{Pattern: "nobody:x:65534:", Category: CategoryPasswd, Confidence: 9},
+	{Pattern: "nobody:x:99:", Category: CategoryPasswd, Confidence: 8},
+	{Pattern: "sync:x:5:0:", Category: CategoryPasswd, Confidence: 8},
 
 	// -------------------------------------------------------------------------
 	// LINUX /etc/shadow — Hash prefixes that only appear inside shadow files.
@@ -52,12 +54,16 @@ var AllSignatures = []Signature{
 	// -------------------------------------------------------------------------
 	{Pattern: "HTTP_USER_AGENT=", Category: CategoryGeneric, Confidence: 10},
 	{Pattern: "PATH=/usr/local/bin", Category: CategoryGeneric, Confidence: 8},
+	{Pattern: "HOME=/", Category: CategoryGeneric, Confidence: 7},
+	{Pattern: "SHELL=/bin/sh", Category: CategoryGeneric, Confidence: 7},
 
 	// -------------------------------------------------------------------------
 	// LINUX Error Logs — Apache/Nginx error log format.
 	// FP risk: low — this exact format is rare outside log files.
 	// -------------------------------------------------------------------------
 	{Pattern: "[error] [client ", Category: CategoryGeneric, Confidence: 8},
+	{Pattern: "Apache/2.4.", Category: CategoryGeneric, Confidence: 6},
+	{Pattern: "nginx/", Category: CategoryGeneric, Confidence: 5},
 
 	// -------------------------------------------------------------------------
 	// WINDOWS boot.ini — Only present on older Windows systems.
@@ -65,6 +71,8 @@ var AllSignatures = []Signature{
 	// -------------------------------------------------------------------------
 	{Pattern: "multi(0)disk(0)rdisk(0)partition", Category: CategoryBootIni, Confidence: 10},
 	{Pattern: "[boot loader]", Category: CategoryBootIni, Confidence: 8},
+	{Pattern: "AUTOEXEC.BAT", Category: CategoryBootIni, Confidence: 7},
+	{Pattern: "MSDOS.SYS", Category: CategoryBootIni, Confidence: 7},
 
 	// -------------------------------------------------------------------------
 	// WINDOWS win.ini — The comment line is specific to win.ini structure.
@@ -72,6 +80,8 @@ var AllSignatures = []Signature{
 	// documentation or config dumps on legitimate pages.
 	// -------------------------------------------------------------------------
 	{Pattern: "; for 16-bit app support", Category: CategoryWinIni, Confidence: 6},
+	{Pattern: "[mci extensions]", Category: CategoryWinIni, Confidence: 5},
+	{Pattern: "[drivers]", Category: CategoryWinIni, Confidence: 4},
 
 	// -------------------------------------------------------------------------
 	// WINDOWS system.ini — More specific patterns only.
@@ -79,6 +89,7 @@ var AllSignatures = []Signature{
 	// content) so they are excluded. Only "wave=mmdrv.dll" is specific enough.
 	// -------------------------------------------------------------------------
 	{Pattern: "wave=mmdrv.dll", Category: CategorySystemIni, Confidence: 8},
+	{Pattern: "[386Enh]", Category: CategorySystemIni, Confidence: 5},
 
 	// -------------------------------------------------------------------------
 	// IIS web.config — Microsoft-specific XML namespaces and tags.
@@ -100,6 +111,7 @@ var AllSignatures = []Signature{
 	{Pattern: "Warning: require_once(", Category: CategoryPHPError, Confidence: 10},
 	{Pattern: "failed to open stream: No such file", Category: CategoryPHPError, Confidence: 10},
 	{Pattern: "Failed opening required", Category: CategoryPHPError, Confidence: 10},
+	{Pattern: "open_basedir restriction in effect", Category: CategoryPHPError, Confidence: 10},
 
 	// -------------------------------------------------------------------------
 	// JAVA / Tomcat — web.xml tags and FileNotFoundException are Java-specific.
@@ -107,4 +119,6 @@ var AllSignatures = []Signature{
 	{Pattern: "<servlet-class>", Category: CategoryJava, Confidence: 8},
 	{Pattern: "<servlet-mapping>", Category: CategoryJava, Confidence: 8},
 	{Pattern: "java.io.FileNotFoundException:", Category: CategoryJava, Confidence: 9},
+	{Pattern: "javax.servlet.ServletException", Category: CategoryJava, Confidence: 8},
+	{Pattern: "java.lang.RuntimeException", Category: CategoryJava, Confidence: 7},
 }

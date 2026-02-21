@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -35,15 +36,26 @@ func TestGenerateTasks(t *testing.T) {
 			close(tasks)
 		}()
 
-		task := <-tasks
-		if !strings.Contains(task.URL, "file="+payloads[0]) {
-			t.Errorf("Expected URL to contain injected payload, got %s", task.URL)
+		var tasksList []Task
+		for task := range tasks {
+			tasksList = append(tasksList, task)
 		}
-		if !strings.Contains(task.URL, "other=keep") {
-			t.Errorf("Expected URL to keep other params, got %s", task.URL)
+
+		foundFile := false
+		for _, task := range tasksList {
+			if task.InjectionPoint == "URL_file" {
+				foundFile = true
+				if !strings.Contains(task.URL, "file="+payloads[0]) {
+					t.Errorf("Expected URL to contain injected payload for file, got %s", task.URL)
+				}
+				if !strings.Contains(task.URL, "other=keep") {
+					t.Errorf("Expected URL to keep other params, got %s", task.URL)
+				}
+			}
 		}
-		if task.InjectionPoint != "URL_file" {
-			t.Errorf("Expected injection point to be URL_file, got %s", task.InjectionPoint)
+
+		if !foundFile {
+			t.Errorf("Expected a task injecting into 'file' parameter")
 		}
 	})
 
@@ -52,21 +64,32 @@ func TestGenerateTasks(t *testing.T) {
 		tasks := make(chan Task, 10)
 		targetURL := "http://test.com/api"
 		postData := "p1=val1&p2=val2"
+		escapedPayload := url.QueryEscape(payloads[0])
 		go func() {
 			GenerateTasks(targetURL, payloads, postData, "POST", "", nil, false, tasks)
 			close(tasks)
 		}()
 
 		// Expect 2 tasks, one for each parameter
-		task1 := <-tasks
-		task2 := <-tasks
+		var tasksList []Task
+		tasksList = append(tasksList, <-tasks)
+		tasksList = append(tasksList, <-tasks)
 
-		if !((strings.Contains(task1.PostData, "p1="+payloads[0]) && task1.InjectionPoint == "POST_p1") ||
-			(strings.Contains(task2.PostData, "p1="+payloads[0]) && task2.InjectionPoint == "POST_p1")) {
+		foundP1 := false
+		foundP2 := false
+		for _, t := range tasksList {
+			if strings.Contains(t.PostData, "p1="+escapedPayload) && t.InjectionPoint == "POST_p1" {
+				foundP1 = true
+			}
+			if strings.Contains(t.PostData, "p2="+escapedPayload) && t.InjectionPoint == "POST_p2" {
+				foundP2 = true
+			}
+		}
+
+		if !foundP1 {
 			t.Errorf("Expected a task injecting into p1")
 		}
-		if !((strings.Contains(task1.PostData, "p2="+payloads[0]) && task1.InjectionPoint == "POST_p2") ||
-			(strings.Contains(task2.PostData, "p2="+payloads[0]) && task2.InjectionPoint == "POST_p2")) {
+		if !foundP2 {
 			t.Errorf("Expected a task injecting into p2")
 		}
 	})
